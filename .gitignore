@@ -1,0 +1,19 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.env
+.venv/
+*.log
+*.sqlite
+.DS_Store
+
+# Rapports générés
+port_scan_*.json
+port_scan_*.txt
+port_scan_*.csv
+password_analysis_*.json
+password_analysis_*.txt

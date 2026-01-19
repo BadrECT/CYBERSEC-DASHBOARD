@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CyberSec Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🔒 CYBERSEC <span class="highlight">DASHBOARD</span></h1>
+            <p class="subtitle">Outil d'Audit & Analyse de Sécurité</p>
+        </header>
+
+        <main>
+            <!-- Navigation Tabs -->
+            <div class="tabs">
+                <button class="tab-btn active" onclick="openTab('port-scan')">📡 Scanner de Ports</button>
+                <button class="tab-btn" onclick="openTab('password-check')">🔐 Audit Mot de Passe</button>
+            </div>
+
+            <!-- Port Scanner Section -->
+            <section id="port-scan" class="tab-content active">
+                <div class="card">
+                    <h2>Configuration du Scan</h2>
+                    <div class="input-group">
+                        <input type="text" id="target" placeholder="Cible (IP ou Domaine)" value="scanme.nmap.org">
+                    </div>
+                    <div class="row">
+                        <div class="input-group">
+                            <label>Port Début</label>
+                            <input type="number" id="start_port" value="1">
+                        </div>
+                        <div class="input-group">
+                            <label>Port Fin</label>
+                            <input type="number" id="end_port" value="100">
+                        </div>
+                    </div>
+                    <button onclick="runScan()" class="action-btn">LANCER LE SCAN</button>
+                </div>
+
+                <div id="scan-results" class="results-area hidden">
+                    <h3>📊 Résultats du Scan</h3>
+                    <div class="status-bar">
+                        <span id="scan-status">En attente...</span>
+                        <span id="scan-time"></span>
+                    </div>
+                    <div id="ports-list" class="ports-grid"></div>
+                </div>
+            </section>
+
+            <!-- Password Checker Section -->
+            <section id="password-check" class="tab-content">
+                <div class="card">
+                    <h2>Analyseur de Complexité</h2>
+                    <div class="input-group password-group">
+                        <input type="password" id="password-input" placeholder="Entrez un mot de passe">
+                        <button onclick="togglePassword()" class="eye-btn">👁️</button>
+                    </div>
+                    <button onclick="checkPassword()" class="action-btn">ANALYSER</button>
+                </div>
+
+                <div id="password-results" class="results-area hidden">
+                    <div class="score-card">
+                        <div class="score-circle">
+                            <span id="score-value">0</span>
+                            <span class="score-label">/100</span>
+                        </div>
+                        <div class="rating-box">
+                            <h3 id="rating-text">N/A</h3>
+                            <p id="breach-alert" class="hidden">🚨 COMPROMIS !</p>
+                        </div>
+                    </div>
+                    
+                    <div class="feedback-grid" id="feedback-list">
+                        <!-- Items injectés via JS -->
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script>
+        function openTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById(tabId).classList.add('active');
+            event.target.classList.add('active');
+        }
+
+        function togglePassword() {
+            const input = document.getElementById('password-input');
+            input.type = input.type === 'password' ? 'text' : 'password';
+        }
+
+        async function runScan() {
+            const btn = document.querySelector('#port-scan .action-btn');
+            const results = document.getElementById('scan-results');
+            const list = document.getElementById('ports-list');
+            const status = document.getElementById('scan-status');
+            
+            btn.disabled = true;
+            btn.innerText = "SCAN EN COURS...";
+            results.classList.remove('hidden');
+            status.innerText = "Scanning...";
+            list.innerHTML = "";
+            status.className = "scanning";
+
+            try {
+                const response = await fetch('/scan_ports', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        target: document.getElementById('target').value,
+                        start_port: document.getElementById('start_port').value,
+                        end_port: document.getElementById('end_port').value
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    status.innerText = `Terminé en ${data.duration}s`;
+                    status.className = "success";
+                    
+                    if (data.count === 0) {
+                        list.innerHTML = "<div class='no-ports'>Aucun port ouvert trouvé</div>";
+                    } else {
+                        data.open_ports.forEach(port => {
+                            const div = document.createElement('div');
+                            div.className = 'port-item';
+                            div.innerHTML = `
+                                <span class="port-number">${port}</span>
+                                <span class="port-status">OUVERT</span>
+                            `;
+                            list.appendChild(div);
+                        });
+                    }
+                } else {
+                    status.innerText = "Erreur: " + data.error;
+                    status.className = "error";
+                }
+            } catch (e) {
+                status.innerText = "Erreur de connexion";
+            }
+            
+            btn.disabled = false;
+            btn.innerText = "LANCER LE SCAN";
+        }
+
+        async function checkPassword() {
+            const pwd = document.getElementById('password-input').value;
+            const results = document.getElementById('password-results');
+            
+            if (!pwd) return;
+            
+            results.classList.remove('hidden');
+            
+            const response = await fetch('/check_password', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ password: pwd })
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                // Score animation
+                document.getElementById('score-value').innerText = data.score;
+                const ratingText = document.getElementById('rating-text');
+                ratingText.innerText = data.rating;
+                
+                // Color coding
+                if(data.score < 40) ratingText.style.color = "#ff4444";
+                else if(data.score < 80) ratingText.style.color = "#ffbb33";
+                else ratingText.style.color = "#00C851";
+
+                // Breach alert
+                const breachInfo = document.getElementById('breach-alert');
+                if(data.breached) {
+                    breachInfo.classList.remove('hidden');
+                    breachInfo.style.display = 'block';
+                } else {
+                    breachInfo.style.display = 'none';
+                }
+                
+                // Feedback
+                const feedbackList = document.getElementById('feedback-list');
+                feedbackList.innerHTML = '';
+                
+                for (const [key, passed] of Object.entries(data.feedback)) {
+                    const div = document.createElement('div');
+                    div.className = `feedback-item ${passed ? 'pass' : 'fail'}`;
+                    // Format key name nicely
+                    let label = key.replace(/_/g, ' ');
+                    if(key === 'common_password') label = "Mot de passe rare";
+                    
+                    div.innerText = (passed ? '✅ ' : '❌ ') + label.toUpperCase();
+                    feedbackList.appendChild(div);
+                }
+            }
+        }
+    </script>
+</body>
+</html>
